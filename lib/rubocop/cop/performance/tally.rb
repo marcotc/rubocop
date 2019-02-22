@@ -31,16 +31,22 @@ module RuboCop
       # array and then run the block on the array. A simple work around to
       # make `count` work with a block is to call `to_a.count {...}`.
       #
+      #
+      #
+      #
+      #
+      # MY DOCS
+      #
       # Example:
       #   arr.group_by { |x| x }.map { |k, v| [k, v.count] }.to_h
       #   arr.group_by { |x| x }.transform_values { |v| v.length }
-      #   arr.group_by(&:itself).map { |k, v| [k, v.size] }.to_h
-      #   Hash[arr.group_by { |x| x }.map { |k, v| [k, v.size] }]
+      #   Hash[arr.group_by(&:itself).map { |k, v| [k, v.size] }]
       #
       #   arr.inject(Hash.new(0)) { |h, v| h[v] += 1; h }
       #   arr.each_with_object(Hash.new(0)) { |v, h| h[v] += 1 }
       #
       #   MARCO! see https://stackoverflow.com/questions/5470725/how-to-group-by-count-in-array-without-using-loop
+      #   MARCO! post benchmarks
       #
       #   becomes:
       #
@@ -52,6 +58,7 @@ module RuboCop
         # minimum_target_ruby_version 2.7
 
         MSG = 'Use `count` instead of `%<selector>s...%<counter>s`.'.freeze
+        DESIRED_METHOD = 'tally'
 
         def_node_matcher :group_by_map?, <<-PATTERN
           {
@@ -70,7 +77,7 @@ module RuboCop
             (block
               (send
                 (block
-                  (send _ :group_by)
+                  (send $_enumerable :group_by)
                   (args
                     (arg $_x))
                   (lvar $_x)) {:map :map!})
@@ -92,16 +99,40 @@ module RuboCop
             # end
 
             add_offense(node,
+                        location: create_range(selector_node, node),
                         message: 'TEST!'
-                        # location: range,
+                        #
                         # message: format(MSG, selector: selector,
                         #                      counter: counter))
             )
           end
         end
 
+        # TODO I feel like I might be doing this wrong if I always have to fix Range
+        def create_range(enumerable_node, node)
+          Parser::Source::Range.new(
+            node.source_range.source_buffer,
+            enumerable_node.parent.loc.dot.end_pos,
+            node.loc.expression.end_pos)
+        end
+
         def autocorrect(node)
-          a=1
+          ->(corrector) do
+            group_by_map_1?(node) do |selector_node, _, _|
+              corrector.replace(create_range(selector_node, node),
+                DESIRED_METHOD)
+              # test with line breaks, or weird spacing
+              #
+              # [].
+              # group_by ...
+              #
+              # []
+              # .group_by ...
+              #
+              # [] . group_by ...
+            end
+          end
+
           # selector_node, selector, _counter = count_candidate?(node)
           # selector_loc = selector_node.loc.selector
           #
