@@ -325,6 +325,7 @@ In the following section you find all available cops:
 * [Performance/Size](cops_performance.md#performancesize)
 * [Performance/StartWith](cops_performance.md#performancestartwith)
 * [Performance/StringReplacement](cops_performance.md#performancestringreplacement)
+* [Performance/Tally](cops_performance.md#performancetally)
 * [Performance/TimesMap](cops_performance.md#performancetimesmap)
 * [Performance/UnfreezeString](cops_performance.md#performanceunfreezestring)
 * [Performance/UnneededSort](cops_performance.md#performanceunneededsort)

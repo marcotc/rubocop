@@ -40,10 +40,7 @@ module RuboCop
       # Example:
       #   arr.group_by { |x| x }.map { |k, v| [k, v.count] }.to_h
       #   arr.group_by { |x| x }.transform_values { |v| v.length }
-      #   Hash[arr.group_by(&:itself).map { |k, v| [k, v.size] }]
-      #
       #   arr.inject(Hash.new(0)) { |h, v| h[v] += 1; h }
-      #   arr.each_with_object(Hash.new(0)) { |v, h| h[v] += 1 }
       #
       #   MARCO! see https://stackoverflow.com/questions/5470725/how-to-group-by-count-in-array-without-using-loop
       #   MARCO! post benchmarks
@@ -57,69 +54,87 @@ module RuboCop
 
         # minimum_target_ruby_version 2.7
 
-        MSG = 'Use `count` instead of `%<selector>s...%<counter>s`.'.freeze
+        MSG = 'Use `tally` to count the occurence items in a list.'.freeze
         DESIRED_METHOD = 'tally'
 
         def_node_matcher :group_by_map?, <<-PATTERN
-          {
-            (block
-              (send
-                (block
-                  (send (_ :group_by) (args (arg $_x)) (lvar $_x))
-                  :map) (args (arg $_k) (arg $_v)) (array (lvar $_k) (send (lvar $_v) :size))
-              ) 
-            :to_h)
-          }
-        PATTERN
-
-        def_node_matcher :group_by_map_1?, <<-PATTERN
           (send
             (block
               (send
                 (block
                   (send $_enumerable :group_by)
                   (args
-                    (arg $_x))
-                  (lvar $_x)) {:map :map!})
+                    (arg _x))
+                  (lvar _x)) {:map :map!})
               (args
-                (arg $_k)
-                (arg $_v))
+                (arg _k)
+                (arg _v))
               (array
-                (lvar $_k)
+                (lvar _k)
                 (send
-                  (lvar $_v) {:count :length :size}))) :to_h)
+                  (lvar _v) {:count :length :size}))) :to_h)
         PATTERN
 
-        def on_send(node)
-          group_by_map_1?(node) do |selector_node, selector, counter|
-            # return unless eligible_node?(node)
-            #
-            # range = source_starting_at(node) do
-            #   selector_node.loc.selector.begin_pos
-            # end
+        def_node_matcher :group_by_transform_values?, <<-PATTERN
+          (block
+            (send
+              (block
+                (send $_enumerable :group_by)
+                (args
+                  (arg _x))
+                (lvar _x)) {:transform_values :transform_values!})
+            (args
+              (arg _v))
+              (send
+                (lvar _v) {:count :length :size}))
+        PATTERN
 
-            add_offense(node,
-                        location: create_range(selector_node, node),
-                        message: 'TEST!'
-                        #
-                        # message: format(MSG, selector: selector,
-                        #                      counter: counter))
-            )
-          end
+
+        def_node_matcher :inject?, <<-PATTERN
+          (block
+            (send $_enumerable {:inject :reduce}
+              (send
+                (const nil? :Hash) :new
+                (int 0)))
+            (args
+              (arg _h)
+              (arg _v))
+            (begin
+              (op-asgn
+                (send
+                  (lvar _h) :[]
+                  (lvar _v)) :+
+                (int 1))
+              (lvar _h)))
+        PATTERN
+
+
+      # def on_block_pass(node)
+      #   # puts node
+      # end
+
+      
+
+      def on_block(node)
+        group_by_transform_values?(node) do |selector_node, selector, counter|
+          add_offense(node, location: offending_range(selector_node, node),message: MSG)
         end
 
-        # TODO I feel like I might be doing this wrong if I always have to fix Range
-        def create_range(enumerable_node, node)
-          Parser::Source::Range.new(
-            node.source_range.source_buffer,
-            enumerable_node.parent.loc.dot.end_pos,
-            node.loc.expression.end_pos)
+        inject?(node) do |selector_node, selector, counter|
+          add_offense(node, location: offending_range(selector_node, node),message: MSG)
         end
+      end
+
+      def on_send(node)
+        group_by_map?(node) do |selector_node, selector, counter|
+          add_offense(node, location: offending_range(selector_node, node),message: MSG)
+        end
+      end
 
         def autocorrect(node)
           ->(corrector) do
-            group_by_map_1?(node) do |selector_node, _, _|
-              corrector.replace(create_range(selector_node, node),
+            group_by_map?(node) do |selector_node, _, _|
+              corrector.replace(offending_range(selector_node, node),
                 DESIRED_METHOD)
               # test with line breaks, or weird spacing
               #
@@ -131,35 +146,26 @@ module RuboCop
               #
               # [] . group_by ...
             end
-          end
 
-          # selector_node, selector, _counter = count_candidate?(node)
-          # selector_loc = selector_node.loc.selector
-          #
-          # return if selector == :reject
-          #
-          # range = source_starting_at(node) { |n| n.loc.dot.begin_pos }
-          #
-          # lambda do |corrector|
-          #   corrector.remove(range)
-          #   corrector.replace(selector_loc, 'count')
-          # end
+            group_by_transform_values?(node) do |selector_node, _, _|
+              corrector.replace(offending_range(selector_node, node), DESIRED_METHOD)
+            end
+
+            inject?(node) do |selector_node, _, _|
+              puts selector_node
+              corrector.replace(offending_range(selector_node, node), DESIRED_METHOD)
+            end
+          end
         end
 
         private
 
-        def eligible_node?(node)
-          !(node.parent && node.parent.block_type?)
-        end
-
-        def source_starting_at(node)
-          begin_pos = if block_given?
-                        yield node
-                      else
-                        node.source_range.begin_pos
-                      end
-
-          range_between(begin_pos, node.source_range.end_pos)
+        # TODO I feel like I might be doing this wrong if I always have to fix Range
+        def offending_range(enumerable_node, node)
+          Parser::Source::Range.new(
+            node.source_range.source_buffer,
+            enumerable_node.parent.loc.dot.end_pos,
+            node.loc.expression.end_pos)
         end
       end
     end
