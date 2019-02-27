@@ -2,6 +2,10 @@
 
 ## master (unreleased)
 
+## New features
+
+* [#???](https://github.com/rubocop-hq/rubocop/pull/???): New cop `Performance/Tally` checks for inefficient implementations of the `group_by+count` pattern and suggests replacing them with `#tally`. ([@marcotc][])
+
 ### Bug fixes
 
 * [#6763](https://github.com/rubocop-hq/rubocop/pull/6763): Fix false positives in range literals for `Style/MethodCallWithArgsParentheses` `omit_parentheses`. ([@gsamokovarov]][])

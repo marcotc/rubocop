@@ -3,51 +3,25 @@
 module RuboCop
   module Cop
     module Performance
-      # This cop is used to identify usages of `count` on an `Enumerable` that
-      # follow calls to `select` or `reject`. Querying logic can instead be
-      # passed to the `count` call.
+      # This cop checks for inefficient implementations of the `group_by+count`
+      # pattern: count the number of occurences of each unique element of a list
+      # and return a hash where the keys are the list elements and values are the
+      # number of occurences.
+      #
+      # This same logic is implemented efficiently (since Ruby 2.7) by
+      # `Enumerable#tally`.
       #
       # @example
       #   # bad
-      #   [1, 2, 3].select { |e| e > 2 }.size
-      #   [1, 2, 3].reject { |e| e > 2 }.size
-      #   [1, 2, 3].select { |e| e > 2 }.length
-      #   [1, 2, 3].reject { |e| e > 2 }.length
-      #   [1, 2, 3].select { |e| e > 2 }.count { |e| e.odd? }
-      #   [1, 2, 3].reject { |e| e > 2 }.count { |e| e.even? }
-      #   array.select(&:value).count
+      #   [1, 2, 3].group_by { |x| x }.map { |k, v| [k, v.count] }.to_h
+      #   [1, 2, 3].group_by { |x| x }.transform_values { |v| v.length }
+      #   [1, 2, 3].inject(Hash.new(0)) { |h, v| h[v] += 1; h }
       #
       #   # good
-      #   [1, 2, 3].count { |e| e > 2 }
-      #   [1, 2, 3].count { |e| e < 2 }
-      #   [1, 2, 3].count { |e| e > 2 && e.odd? }
-      #   [1, 2, 3].count { |e| e < 2 && e.even? }
-      #   Model.select('field AS field_one').count
-      #   Model.select(:value).count
-      #
-      # `ActiveRecord` compatibility:
-      # `ActiveRecord` will ignore the block that is passed to `count`.
-      # Other methods, such as `select`, will convert the association to an
-      # array and then run the block on the array. A simple work around to
-      # make `count` work with a block is to call `to_a.count {...}`.
-      #
-      #
-      #
-      #
-      #
-      # MY DOCS
-      #
-      # Example:
-      #   arr.group_by { |x| x }.map { |k, v| [k, v.count] }.to_h
-      #   arr.group_by { |x| x }.transform_values { |v| v.length }
-      #   arr.inject(Hash.new(0)) { |h, v| h[v] += 1; h }
+      #   [1, 2, 3].tally
       #
       #   MARCO! see https://stackoverflow.com/questions/5470725/how-to-group-by-count-in-array-without-using-loop
       #   MARCO! post benchmarks
-      #
-      #   becomes:
-      #
-      #   arr.tally
       class Tally < Cop
         # extend TargetRubyVersion
         include RangeHelp
