@@ -16,6 +16,7 @@ module RuboCop
       #   [1, 2, 3].group_by { |x| x }.map { |k, v| [k, v.count] }.to_h
       #   [1, 2, 3].group_by { |x| x }.transform_values { |v| v.length }
       #   [1, 2, 3].inject(Hash.new(0)) { |h, v| h[v] += 1; h }
+      #   MORE EXAMPLES HERE: https://bugs.ruby-lang.org/issues/11076
       #
       #   # good
       #   [1, 2, 3].tally
